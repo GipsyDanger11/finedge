@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, portfolios, assets, transactions, follows, notifications, userProfiles, marketData } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,85 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Portfolio queries
+export async function getPortfoliosByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(portfolios).where(eq(portfolios.userId, userId));
+}
+
+export async function getPortfolioWithAssets(portfolioId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const portfolio = await db.select().from(portfolios).where(eq(portfolios.id, portfolioId)).limit(1);
+  if (!portfolio.length) return null;
+  const assetList = await db.select().from(assets).where(eq(assets.portfolioId, portfolioId));
+  return { ...portfolio[0], assets: assetList };
+}
+
+// Asset queries
+export async function getAssetsByPortfolioId(portfolioId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(assets).where(eq(assets.portfolioId, portfolioId));
+}
+
+// Transaction queries
+export async function getTransactionsByPortfolioId(portfolioId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(transactions).where(eq(transactions.portfolioId, portfolioId)).limit(limit);
+}
+
+// Social queries
+export async function getUserFollowers(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(follows).where(eq(follows.followingId, userId));
+}
+
+export async function getUserFollowing(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(follows).where(eq(follows.followerId, userId));
+}
+
+export async function isUserFollowing(followerId: number, followingId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db.select().from(follows).where(
+    and(eq(follows.followerId, followerId), eq(follows.followingId, followingId))
+  ).limit(1);
+  return result.length > 0;
+}
+
+// Notification queries
+export async function getUnreadNotifications(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(notifications).where(
+    and(eq(notifications.userId, userId), eq(notifications.isRead, false))
+  );
+}
+
+// User profile queries
+export async function getUserProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+// Market data queries
+export async function getMarketData(symbol: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(marketData).where(eq(marketData.symbol, symbol)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getAllMarketData() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(marketData);
+}
