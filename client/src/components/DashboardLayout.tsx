@@ -21,15 +21,35 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import {
+  BarChart3,
+  Bell,
+  LineChart,
+  LogOut,
+  PanelLeft,
+  ReceiptText,
+  Settings,
+  TrendingUp,
+  Users,
+  User,
+  Wallet,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
+import ThreeScrollBackground from "./ThreeScrollBackground";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: BarChart3, label: "Dashboard", path: "/dashboard" },
+  { icon: Wallet, label: "Portfolio", path: "/portfolio" },
+  { icon: ReceiptText, label: "Transactions", path: "/transactions" },
+  { icon: TrendingUp, label: "Trading", path: "/trading" },
+  { icon: Bell, label: "Alerts", path: "/alerts" },
+  { icon: Users, label: "Community", path: "/community" },
+  { icon: LineChart, label: "Market", path: "/market" },
+  { icon: BarChart3, label: "Analytics", path: "/analytics" },
+  { icon: Settings, label: "Settings", path: "/settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -47,6 +67,7 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -70,7 +91,7 @@ export default function DashboardLayout({
           </div>
           <Button
             onClick={() => {
-              window.location.href = getLoginUrl();
+              setLocation(getLoginUrl());
             }}
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
@@ -153,6 +174,7 @@ function DashboardLayoutContent({
 
   return (
     <>
+      <ThreeScrollBackground className="fixed inset-0 -z-10 pointer-events-none opacity-90" />
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
@@ -171,7 +193,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                    FINEDGE
                   </span>
                 </div>
               ) : null}
@@ -222,6 +244,20 @@ function DashboardLayoutContent({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
+                  onClick={() => setLocation("/profile")}
+                  className="cursor-pointer"
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation("/settings")}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
@@ -257,7 +293,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
       </SidebarInset>
     </>
   );

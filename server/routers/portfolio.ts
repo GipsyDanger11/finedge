@@ -1,8 +1,3 @@
-/**
- * Portfolio Router
- * Handles all portfolio-related operations
- */
-
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
@@ -12,33 +7,56 @@ import {
   getTransactionsByPortfolioId,
   getDb,
 } from "../db";
-import { portfolios, assets, transactions, type InsertPortfolio, type InsertAsset, type InsertTransaction } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { Portfolio, Asset, Transaction } from "../models";
+import { Notification } from "../models";
 
 export const portfolioRouter = router({
-  /**
-   * Get all portfolios for the current user
-   */
+  getPublicWithAssets: publicProcedure
+    .input(z.object({ portfolioId: z.string() }))
+    .query(async ({ input }) => {
+      await getDb();
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || !(portfolio as any).isPublic) {
+        throw new Error("Portfolio not found");
+      }
+      const assets = await Asset.find({ portfolioId: input.portfolioId }).lean();
+      return { ...(portfolio as any), assets };
+    }),
+
+  overview: protectedProcedure.query(async ({ ctx }) => {
+    await getDb();
+    const portfolios = await Portfolio.find({ userId: ctx.user.id }).lean();
+    const portfolioIds = portfolios.map((p: any) => p._id);
+    const transactionCount =
+      portfolioIds.length > 0
+        ? await Transaction.countDocuments({ portfolioId: { $in: portfolioIds } })
+        : 0;
+
+    const liveCount = portfolios.filter((p: any) => p.type === "live").length;
+    const practiceCount = portfolios.filter((p: any) => p.type === "practice").length;
+
+    return {
+      portfolioCount: portfolios.length,
+      liveCount,
+      practiceCount,
+      transactionCount,
+    };
+  }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     return getPortfoliosByUserId(ctx.user.id);
   }),
 
-  /**
-   * Get portfolio with all assets
-   */
   getWithAssets: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+    .input(z.object({ portfolioId: z.string() }))
     .query(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
       return portfolio;
     }),
 
-  /**
-   * Create a new portfolio
-   */
   create: protectedProcedure
     .input(
       z.object({
@@ -49,43 +67,37 @@ export const portfolioRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
 
-      const insertData: InsertPortfolio = {
+      const portfolio = await Portfolio.create({
         userId: ctx.user.id,
         name: input.name,
         description: input.description,
         type: input.type,
-        initialBalance: input.initialBalance.toString(),
-        currentBalance: input.initialBalance.toString(),
-        totalInvested: "0",
-        totalGain: "0",
-        gainPercentage: "0",
-      };
+        initialBalance: input.initialBalance,
+        currentBalance: input.initialBalance,
+        totalInvested: 0,
+        totalGain: 0,
+        gainPercentage: 0,
+      });
 
-      const result = await db.insert(portfolios).values(insertData);
-      return { success: true, portfolioId: result[0] };
+      return { success: true, portfolioId: portfolio._id.toString() };
     }),
 
-  /**
-   * Update portfolio details
-   */
   update: protectedProcedure
     .input(
       z.object({
-        portfolioId: z.number(),
+        portfolioId: z.string(),
         name: z.string().optional(),
         description: z.string().optional(),
         isPublic: z.boolean().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
 
-      const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
@@ -94,60 +106,53 @@ export const portfolioRouter = router({
       if (input.description !== undefined) updateData.description = input.description;
       if (input.isPublic !== undefined) updateData.isPublic = input.isPublic;
 
-      await db.update(portfolios).set(updateData).where(eq(portfolios.id, input.portfolioId));
+      await Portfolio.findByIdAndUpdate(input.portfolioId, { $set: updateData });
       return { success: true };
     }),
 
-  /**
-   * Delete a portfolio
-   */
   delete: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+    .input(z.object({ portfolioId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
 
-      const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
-      await db.delete(portfolios).where(eq(portfolios.id, input.portfolioId));
+      await Portfolio.findByIdAndDelete(input.portfolioId);
+      await Asset.deleteMany({ portfolioId: input.portfolioId });
+      await Transaction.deleteMany({ portfolioId: input.portfolioId });
+
       return { success: true };
     }),
 
-  /**
-   * Get portfolio statistics
-   */
   getStats: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+    .input(z.object({ portfolioId: z.string() }))
     .query(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
-      const totalValue = portfolio.assets.reduce((sum, asset) => sum + parseFloat(asset.totalValue), 0);
-      const totalGain = portfolio.assets.reduce((sum, asset) => sum + parseFloat(asset.gainLoss as string), 0);
-      const gainPercentage = portfolio.assets.length > 0 ? (totalGain / parseFloat(portfolio.initialBalance)) * 100 : 0;
+      const totalValue = portfolio.assets.reduce((sum: number, asset: any) => sum + Number(asset.totalValue), 0);
+      const totalGain = portfolio.assets.reduce((sum: number, asset: any) => sum + Number(asset.gainLoss), 0);
+      const gainPercentage = portfolio.assets.length > 0 ? (totalGain / Number(portfolio.initialBalance)) * 100 : 0;
 
       return {
         totalValue,
         totalGain,
         gainPercentage,
         assetCount: portfolio.assets.length,
-        initialBalance: parseFloat(portfolio.initialBalance),
-        currentBalance: parseFloat(portfolio.currentBalance),
+        initialBalance: Number(portfolio.initialBalance),
+        currentBalance: Number(portfolio.currentBalance),
       };
     }),
 
-  /**
-   * Add asset to portfolio
-   */
   addAsset: protectedProcedure
     .input(
       z.object({
-        portfolioId: z.number(),
+        portfolioId: z.string(),
         symbol: z.string().min(1).max(20),
         assetType: z.enum(["stock", "crypto", "etf", "commodity", "bond"]),
         quantity: z.number().positive(),
@@ -155,65 +160,55 @@ export const portfolioRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
 
-      const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
       const totalValue = input.quantity * input.currentPrice;
-      const insertData: InsertAsset = {
+      const asset = await Asset.create({
         portfolioId: input.portfolioId,
         symbol: input.symbol,
         assetType: input.assetType,
-        quantity: input.quantity.toString(),
-        averageCost: input.currentPrice.toString(),
-        currentPrice: input.currentPrice.toString(),
-        totalValue: totalValue.toString(),
-        gainLoss: "0",
-        gainLossPercentage: "0",
-      };
+        quantity: input.quantity,
+        averageCost: input.currentPrice,
+        currentPrice: input.currentPrice,
+        totalValue: totalValue,
+        gainLoss: 0,
+        gainLossPercentage: 0,
+      });
 
-      const result = await db.insert(assets).values(insertData);
-      return { success: true, assetId: result[0] };
+      return { success: true, assetId: asset._id.toString() };
     }),
 
-  /**
-   * Get assets for portfolio
-   */
   getAssets: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+    .input(z.object({ portfolioId: z.string() }))
     .query(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
       return portfolio.assets;
     }),
 
-  /**
-   * Get transaction history
-   */
   getTransactions: protectedProcedure
-    .input(z.object({ portfolioId: z.number(), limit: z.number().default(50) }))
+    .input(z.object({ portfolioId: z.string(), limit: z.number().default(50) }))
     .query(async ({ input, ctx }) => {
-      const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      await getDb();
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
       return getTransactionsByPortfolioId(input.portfolioId, input.limit);
     }),
 
-  /**
-   * Add transaction
-   */
   addTransaction: protectedProcedure
     .input(
       z.object({
-        portfolioId: z.number(),
-        assetId: z.number().optional(),
+        portfolioId: z.string(),
+        assetId: z.string().optional(),
         symbol: z.string().min(1).max(20),
         type: z.enum(["buy", "sell", "transfer"]),
         quantity: z.number().positive(),
@@ -223,29 +218,117 @@ export const portfolioRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
 
-      const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
       const totalAmount = input.quantity * input.price + input.fee;
-      const insertData: InsertTransaction = {
+      
+      const transaction = await Transaction.create({
         portfolioId: input.portfolioId,
         assetId: input.assetId,
         symbol: input.symbol,
         type: input.type,
-        quantity: input.quantity.toString(),
-        price: input.price.toString(),
-        totalAmount: totalAmount.toString(),
-        fee: input.fee.toString(),
+        quantity: input.quantity,
+        price: input.price,
+        totalAmount: totalAmount,
+        fee: input.fee,
         notes: input.notes || undefined,
         transactionDate: new Date(),
-      };
+      });
 
-      const result = await db.insert(transactions).values(insertData);
-      return { success: true, transactionId: result[0] };
+      // Simple milestone notifications based on transaction count.
+      try {
+        const count = await Transaction.countDocuments({ portfolioId: input.portfolioId });
+        const milestones = new Set([1, 10, 25, 50, 100]);
+        if (milestones.has(count)) {
+          await Notification.create({
+            userId: ctx.user.id,
+            type: "milestone",
+            title: "Milestone reached",
+            message: `You’ve placed ${count} transaction${count === 1 ? "" : "s"} in this portfolio.`,
+            relatedData: { portfolioId: input.portfolioId, transactionCount: count },
+            isRead: false,
+          });
+        }
+      } catch {
+        // Ignore milestone notification errors.
+      }
+
+      return { success: true, transactionId: transaction._id.toString() };
+    }),
+
+  updateTransaction: protectedProcedure
+    .input(
+      z.object({
+        transactionId: z.string(),
+        portfolioId: z.string(),
+        symbol: z.string().min(1).max(20).optional(),
+        type: z.enum(["buy", "sell", "transfer"]).optional(),
+        quantity: z.number().positive().optional(),
+        price: z.number().positive().optional(),
+        fee: z.number().min(0).optional(),
+        notes: z.string().optional(),
+        transactionDate: z.date().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await getDb();
+
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String((portfolio as any).userId) !== String(ctx.user.id)) {
+        throw new Error("Portfolio not found or unauthorized");
+      }
+
+      const tx = await Transaction.findById(input.transactionId).lean();
+      if (!tx || String((tx as any).portfolioId) !== String(input.portfolioId)) {
+        throw new Error("Transaction not found or unauthorized");
+      }
+
+      const updateData: Record<string, unknown> = {};
+      if (input.symbol !== undefined) updateData.symbol = input.symbol;
+      if (input.type !== undefined) updateData.type = input.type;
+      if (input.quantity !== undefined) updateData.quantity = input.quantity;
+      if (input.price !== undefined) updateData.price = input.price;
+      if (input.fee !== undefined) updateData.fee = input.fee;
+      if (input.notes !== undefined) updateData.notes = input.notes;
+      if (input.transactionDate !== undefined)
+        updateData.transactionDate = input.transactionDate;
+
+      if (
+        input.quantity !== undefined ||
+        input.price !== undefined ||
+        input.fee !== undefined
+      ) {
+        const qty = input.quantity ?? Number((tx as any).quantity ?? 0);
+        const price = input.price ?? Number((tx as any).price ?? 0);
+        const fee = input.fee ?? Number((tx as any).fee ?? 0);
+        updateData.totalAmount = qty * price + fee;
+      }
+
+      await Transaction.findByIdAndUpdate(input.transactionId, { $set: updateData });
+      return { success: true };
+    }),
+
+  deleteTransaction: protectedProcedure
+    .input(z.object({ transactionId: z.string(), portfolioId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await getDb();
+
+      const portfolio = await Portfolio.findById(input.portfolioId).lean();
+      if (!portfolio || String((portfolio as any).userId) !== String(ctx.user.id)) {
+        throw new Error("Portfolio not found or unauthorized");
+      }
+
+      const tx = await Transaction.findById(input.transactionId).lean();
+      if (!tx || String((tx as any).portfolioId) !== String(input.portfolioId)) {
+        throw new Error("Transaction not found or unauthorized");
+      }
+
+      await Transaction.findByIdAndDelete(input.transactionId);
+      return { success: true };
     }),
 });

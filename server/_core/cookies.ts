@@ -39,10 +39,16 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const secure = isSecureRequest(req);
+
+  // Browsers reject `SameSite=None` cookies unless `Secure` is true.
+  // For local http development, fall back to `Lax` so auth works on localhost.
+  const sameSite: CookieOptions["sameSite"] = secure ? "none" : "lax";
+
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    sameSite,
+    secure,
   };
 }

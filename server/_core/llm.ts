@@ -214,11 +214,28 @@ const resolveApiUrl = () =>
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
     : "https://forge.manus.im/v1/chat/completions";
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
+const resolveApiKey = () => {
+  // Prefer Forge built-in key if available, otherwise fall back to Mistral key.
+  const key = ENV.forgeApiKey || ENV.mistralApiKey;
+  return key && key.trim().length > 0 ? key : null;
 };
+
+const mockResult = (model: string, content: string): InvokeResult => ({
+  id: "dev-mock",
+  created: Math.floor(Date.now() / 1000),
+  model,
+  choices: [
+    {
+      index: 0,
+      message: {
+        role: "assistant",
+        content,
+      },
+      finish_reason: "stop",
+    },
+  ],
+  usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+});
 
 const normalizeResponseFormat = ({
   responseFormat,
@@ -266,7 +283,39 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  const apiKey = resolveApiKey();
+  if (!apiKey) {
+    if (!ENV.isProduction) {
+      const wantsJson =
+        (params.responseFormat?.type ?? params.response_format?.type) !== "text";
+      return mockResult(
+        "dev-mock",
+        wantsJson
+          ? JSON.stringify({
+              summary:
+                "LLM is not configured (dev mode). Add BUILT_IN_FORGE_API_KEY or MISTRAL_API_KEY to enable AI.",
+              marketSentiment: "neutral",
+              keyInsights: ["Configure AI keys to enable real insights."],
+              topMovers: [],
+              riskLevel: "medium",
+              advice:
+                "Configure AI keys to enable portfolio analysis. Meanwhile you can use Market/Analytics and paper trading.",
+              diversificationScore: 50,
+              alerts: [],
+              recommendations: ["Add an AI key to enable this feature."],
+              overallRisk: "medium",
+              riskFactors: ["LLM not configured"],
+              concentration: 0,
+              volatilityEstimate: "unknown",
+              suggestions: ["Set BUILT_IN_FORGE_API_KEY or MISTRAL_API_KEY."],
+            })
+          : "LLM is not configured (dev mode)."
+      );
+    }
+    throw new Error(
+      "LLM API key is not configured (BUILT_IN_FORGE_API_KEY or MISTRAL_API_KEY)"
+    );
+  }
 
   const {
     messages,
@@ -316,7 +365,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });

@@ -4,7 +4,7 @@ import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
-import type { User } from "../../drizzle/schema";
+import type { IUser as User } from "../models";
 import * as db from "../db";
 import { ENV } from "./env";
 import type {
@@ -22,6 +22,20 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+};
+
+export type AuthedUser = {
+  id: string;
+  openId: string;
+  name: string | null;
+  email: string | null;
+  loginMethod: string | null;
+  role: "user" | "admin";
+  bio: string | null;
+  avatarUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lastSignedIn: Date;
 };
 
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
@@ -256,7 +270,56 @@ class SDKServer {
     } as GetUserInfoWithJwtResponse;
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
+  async authenticateRequest(req: Request): Promise<AuthedUser> {
+    // Dev-only bypass: allow running without OAuth/session cookies.
+    // If you have MONGODB_URI configured, this will also upsert a dev user.
+    if (!ENV.isProduction) {
+      const cookieHeader = req.headers.cookie;
+      const hasCookie = typeof cookieHeader === "string" && cookieHeader.length > 0;
+      if (!hasCookie) {
+        try {
+          await db.upsertUser({
+            openId: "dev-user",
+            name: "Dev User",
+            email: "dev@local",
+            loginMethod: "dev",
+            role: "admin",
+          } as any);
+          const dev = await db.getUserByOpenId("dev-user");
+          if (dev) {
+            return {
+              id: String((dev as any)._id ?? (dev as any).id ?? "dev-user"),
+              openId: "dev-user",
+              name: ((dev as any).name ?? "Dev User") as string | null,
+              email: ((dev as any).email ?? "dev@local") as string | null,
+              loginMethod: "dev",
+              role: "admin",
+              bio: ((dev as any).bio ?? null) as string | null,
+              avatarUrl: ((dev as any).avatarUrl ?? null) as string | null,
+              createdAt: ((dev as any).createdAt ?? new Date()) as Date,
+              updatedAt: ((dev as any).updatedAt ?? new Date()) as Date,
+              lastSignedIn: ((dev as any).lastSignedIn ?? new Date()) as Date,
+            };
+          }
+        } catch {
+          // If DB isn't available yet, still allow the app to run in dev.
+          return {
+            id: "dev-user",
+            openId: "dev-user",
+            name: "Dev User",
+            email: "dev@local",
+            loginMethod: "dev",
+            role: "admin",
+            bio: null,
+            avatarUrl: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            lastSignedIn: new Date(),
+          };
+        }
+      }
+    }
+
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
@@ -276,10 +339,9 @@ class SDKServer {
         const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
         await db.upsertUser({
           openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
+          name: userInfo.name || undefined,
+          email: userInfo.email ?? undefined,
+          loginMethod: (userInfo.loginMethod ?? userInfo.platform ?? undefined) as string,
         });
         user = await db.getUserByOpenId(userInfo.openId);
       } catch (error) {
@@ -293,11 +355,22 @@ class SDKServer {
     }
 
     await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
+      openId: String(user.openId),
     });
 
-    return user;
+    return {
+      id: String((user as any)._id ?? (user as any).id ?? user.openId),
+      openId: String((user as any).openId),
+      name: ((user as any).name ?? null) as string | null,
+      email: ((user as any).email ?? null) as string | null,
+      loginMethod: ((user as any).loginMethod ?? null) as string | null,
+      role: ((user as any).role ?? "user") as "user" | "admin",
+      bio: ((user as any).bio ?? null) as string | null,
+      avatarUrl: ((user as any).avatarUrl ?? null) as string | null,
+      createdAt: ((user as any).createdAt ?? new Date()) as Date,
+      updatedAt: ((user as any).updatedAt ?? new Date()) as Date,
+      lastSignedIn: ((user as any).lastSignedIn ?? new Date()) as Date,
+    };
   }
 }
 

@@ -8,7 +8,39 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const maybeLoadUmami = () => {
+  const endpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT as string | undefined;
+  const websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID as string | undefined;
+
+  if (!endpoint || !websiteId) return;
+  if (typeof document === "undefined") return;
+
+  const src = `${String(endpoint).replace(/\/+$/, "")}/umami`;
+
+  if (document.querySelector(`script[src="${src}"]`)) return;
+
+  const script = document.createElement("script");
+  script.defer = true;
+  script.src = src;
+  script.dataset.websiteId = websiteId;
+  document.head.appendChild(script);
+};
+
+maybeLoadUmami();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

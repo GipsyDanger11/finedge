@@ -1,13 +1,7 @@
-/**
- * AI Router
- * Handles all AI-powered financial insights and analysis
- */
-
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getPortfolioWithAssets, getDb } from "../db";
-import { aiInsights, type InsertAIInsight } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { AIInsight, Portfolio } from "../models";
 import {
   getAIInsights,
   getRiskAnalysis,
@@ -16,78 +10,108 @@ import {
   type PortfolioData,
 } from "../services/mistralService";
 
-/**
- * Convert portfolio assets to PortfolioData format for AI service
- */
 function formatPortfolioForAI(assets: any[]): PortfolioData[] {
   return assets.map((asset) => ({
     symbol: asset.symbol,
-    quantity: parseFloat(asset.quantity),
-    currentPrice: parseFloat(asset.currentPrice),
-    averageCost: parseFloat(asset.averageCost),
-    gainLoss: parseFloat(asset.gainLoss),
-    gainLossPercentage: parseFloat(asset.gainLossPercentage),
+    quantity: Number(asset.quantity),
+    currentPrice: Number(asset.currentPrice),
+    averageCost: Number(asset.averageCost),
+    gainLoss: Number(asset.gainLoss),
+    gainLossPercentage: Number(asset.gainLossPercentage),
   }));
 }
 
 export const aiRouter = router({
-  /**
-   * Get AI-powered portfolio insights
-   */
-  getInsights: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
-    .query(async ({ input, ctx }) => {
+  getPublicInsights: publicProcedure
+    .input(z.object({ portfolioId: z.string() }))
+    .query(async ({ input }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
-        throw new Error("Portfolio not found or unauthorized");
+      if (!portfolio || !(portfolio as any).isPublic) {
+        throw new Error("Portfolio not found");
       }
 
-      // Check cache first
-      const db = await getDb();
-      if (db) {
-        const cached = await db
-          .select()
-          .from(aiInsights)
-          .where(eq(aiInsights.portfolioId, input.portfolioId))
-          .limit(1);
+      await getDb();
 
-        if (cached.length > 0 && cached[0].expiresAt && new Date(cached[0].expiresAt) > new Date()) {
-          return cached[0].content;
-        }
+      // Reuse cache if present.
+      const cached = await AIInsight.findOne({
+        portfolioId: input.portfolioId,
+        insightType: "recommendations",
+      }).lean();
+
+      if (cached && (cached as any).expiresAt && new Date((cached as any).expiresAt) > new Date()) {
+        return (cached as any).content;
       }
 
-      // Generate new insights
-      const portfolioData = formatPortfolioForAI(portfolio.assets);
-      const totalValue = portfolio.assets.reduce((sum, asset) => sum + parseFloat(asset.totalValue), 0);
-      const totalGain = portfolio.assets.reduce((sum, asset) => sum + parseFloat(asset.gainLoss as any), 0);
+      const portfolioData = formatPortfolioForAI((portfolio as any).assets ?? []);
+      const totalValue = (portfolio as any).assets.reduce(
+        (sum: number, asset: any) => sum + Number(asset.totalValue),
+        0
+      );
+      const totalGain = (portfolio as any).assets.reduce(
+        (sum: number, asset: any) => sum + Number(asset.gainLoss),
+        0
+      );
 
       const insights = await getAIInsights(portfolioData, totalValue, totalGain);
 
-      // Cache the insights
-      if (db) {
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-        const cacheData: InsertAIInsight = {
-          portfolioId: input.portfolioId,
-          insightType: "recommendations",
-          content: JSON.stringify(insights),
-          riskLevel: insights.riskLevel,
-          expiresAt,
-        };
-
-        await db.insert(aiInsights).values(cacheData);
-      }
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await AIInsight.updateOne(
+        { portfolioId: input.portfolioId, insightType: "recommendations" },
+        { $set: { content: insights, riskLevel: (insights as any).riskLevel, expiresAt } },
+        { upsert: true }
+      );
 
       return insights;
     }),
 
-  /**
-   * Get risk analysis for portfolio
-   */
-  getRiskAnalysis: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+  getInsights: protectedProcedure
+    .input(z.object({ portfolioId: z.string() }))
     .query(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
+        throw new Error("Portfolio not found or unauthorized");
+      }
+
+      await getDb();
+
+      // Check cache first
+      const cached = await AIInsight.findOne({
+        portfolioId: input.portfolioId,
+        insightType: "recommendations"
+      }).lean();
+
+      if (cached && cached.expiresAt && new Date(cached.expiresAt) > new Date()) {
+        return cached.content;
+      }
+
+      const portfolioData = formatPortfolioForAI(portfolio.assets);
+      const totalValue = portfolio.assets.reduce((sum: number, asset: any) => sum + Number(asset.totalValue), 0);
+      const totalGain = portfolio.assets.reduce((sum: number, asset: any) => sum + Number(asset.gainLoss), 0);
+
+      const insights = await getAIInsights(portfolioData, totalValue, totalGain);
+
+      // Cache the insights
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      await AIInsight.updateOne(
+        { portfolioId: input.portfolioId, insightType: "recommendations" },
+        {
+          $set: {
+            content: insights,
+            riskLevel: insights.riskLevel,
+            expiresAt,
+          }
+        },
+        { upsert: true }
+      );
+
+      return insights;
+    }),
+
+  getRiskAnalysis: protectedProcedure
+    .input(z.object({ portfolioId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const portfolio = await getPortfolioWithAssets(input.portfolioId);
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
@@ -95,60 +119,53 @@ export const aiRouter = router({
       return getRiskAnalysis(portfolioData);
     }),
 
-  /**
-   * Get market summary and insights
-   */
   getMarketSummary: protectedProcedure.query(async () => {
+    await getDb();
+    
     // Check cache
-    const db = await getDb();
-    if (db) {
-      const cached = await db
-        .select()
-        .from(aiInsights)
-        .where(eq(aiInsights.insightType, "market_summary"))
-        .limit(1);
+    const cached = await AIInsight.findOne({
+      insightType: "market_summary"
+    }).lean();
 
-      if (cached.length > 0 && cached[0].expiresAt && new Date(cached[0].expiresAt) > new Date()) {
-        return cached[0].content;
-      }
+    if (cached && cached.expiresAt && new Date(cached.expiresAt) > new Date()) {
+      return cached.content;
     }
 
-    // Generate new market summary
     const summary = await getMarketSummary();
 
     // Cache it
-    if (db) {
+    try {
       const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours
-      const cacheData: InsertAIInsight = {
-        portfolioId: 0, // Market summary is not portfolio-specific
-        insightType: "market_summary",
-        content: JSON.stringify(summary),
-        expiresAt,
-      };
-
-      try {
-        await db.insert(aiInsights).values(cacheData);
-      } catch {
-        // Ignore cache errors
-      }
+      
+      // using a dummy unqueryable object id for application level insights
+      await AIInsight.updateOne(
+        { insightType: "market_summary" },
+        {
+          $set: {
+            portfolioId: "000000000000000000000000",
+            content: summary,
+            expiresAt,
+          }
+        },
+        { upsert: true }
+      );
+    } catch {
+      // Ignore cache errors
     }
 
     return summary;
   }),
 
-  /**
-   * Get personalized recommendations
-   */
   getRecommendations: protectedProcedure
     .input(
       z.object({
-        portfolioId: z.number(),
+        portfolioId: z.string(),
         riskTolerance: z.enum(["low", "medium", "high"]),
       })
     )
     .query(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
@@ -156,23 +173,17 @@ export const aiRouter = router({
       return getPersonalizedRecommendations(portfolioData, input.riskTolerance);
     }),
 
-  /**
-   * Clear cached insights for a portfolio
-   */
   clearCache: protectedProcedure
-    .input(z.object({ portfolioId: z.number() }))
+    .input(z.object({ portfolioId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const portfolio = await getPortfolioWithAssets(input.portfolioId);
-      if (!portfolio || portfolio.userId !== ctx.user.id) {
+      if (!portfolio || String(portfolio.userId) !== String(ctx.user.id)) {
         throw new Error("Portfolio not found or unauthorized");
       }
 
-      const db = await getDb();
-      if (!db) throw new Error("Database unavailable");
+      await getDb();
+      await AIInsight.deleteMany({ portfolioId: input.portfolioId });
 
-      // Delete cached insights for this portfolio
-      // Note: Using raw delete since Drizzle doesn't have a direct delete method
-      // This would be implemented with proper SQL in production
       return { success: true };
     }),
 });
