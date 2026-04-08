@@ -13,20 +13,45 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // Ensure Express trusts Vercel's proxy
 app.set("trust proxy", 1);
 
+// Debug logging for Vercel environment
+app.use((req, res, next) => {
+  console.log(`[Vercel Request] ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check and diagnostics endpoint
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    env: {
+      hasDb: !!(process.env.MONGODB_URI || process.env.DATABASE_URL),
+      hasMistral: !!process.env.MISTRAL_API_KEY,
+      nodeEnv: process.env.NODE_ENV
+    },
+    url: req.url,
+    time: new Date().toISOString()
+  });
+});
+
 registerOAuthRoutes(app);
 
-app.use(
-  "/api/trpc",
-  createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-);
+// Mount TRPC with flexible path matching
+const trpcMiddleware = createExpressMiddleware({
+  router: appRouter,
+  createContext,
+});
+
+app.use("/api/trpc", trpcMiddleware);
+app.use("/trpc", trpcMiddleware);
 
 // Fallback error handler
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Vercel Express Error:", err);
-  res.status(500).json({ error: "Internal Server Error" });
+  res.status(500).json({ 
+    error: "Internal Server Error",
+    message: err.message,
+    path: req.url
+  });
 });
 
 export default app;
