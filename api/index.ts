@@ -35,16 +35,27 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-registerOAuthRoutes(app);
+try {
+  registerOAuthRoutes(app);
 
-// Mount TRPC with flexible path matching
-const trpcMiddleware = createExpressMiddleware({
-  router: appRouter,
-  createContext,
-});
+  // Mount TRPC with flexible path matching
+  const trpcMiddleware = createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  });
 
-app.use("/api/trpc", trpcMiddleware);
-app.use("/trpc", trpcMiddleware);
+  app.use("/api/trpc", trpcMiddleware);
+  app.use("/trpc", trpcMiddleware);
+} catch (error) {
+  console.error("[Vercel] Initialization Error:", error);
+  app.use((req, res) => {
+    res.status(500).json({
+      error: "Initialization Error",
+      message: (error as any)?.message,
+      stack: (error as any)?.stack
+    });
+  });
+}
 
 // Fallback error handler
 app.use((err: any, req: any, res: any, next: any) => {
