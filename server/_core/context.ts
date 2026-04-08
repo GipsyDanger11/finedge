@@ -15,7 +15,9 @@ export async function createContext(
   try {
     user = await sdk.authenticateRequest(opts.req);
   } catch (error) {
-    // Authentication is optional for public procedures.
+    // If authentication fails in production, don't crash the whole app.
+    // This allows guest access to work via the trpc middleware.
+    console.warn("[Context] Authentication failed, continuing as guest:", (error as any)?.message);
     user = null;
   }
 

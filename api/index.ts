@@ -2,8 +2,10 @@ import "dotenv/config";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "../server/_core/oauth";
-import { appRouter } from "../server/routers";
+import { appRouter } from "../server/routers/index"; // Explicit path
 import { createContext } from "../server/_core/context";
+
+console.log("[Vercel] Function starting...");
 
 const app = express();
 
