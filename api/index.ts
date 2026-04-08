@@ -1,70 +1,60 @@
 import "dotenv/config";
 import express from "express";
+import { initTRPC } from "@trpc/server";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "../server/_core/oauth";
-import { appRouter } from "../server/routers/index"; // Explicit path
-import { createContext } from "../server/_core/context";
+import superjson from "superjson";
+import * as MOCK from "./data.js";
 
-console.log("[Vercel] Function starting...");
+console.log("[Vercel] Function starting in STATIC MOCK mode...");
+
+const t = initTRPC.create({
+  transformer: superjson,
+});
+
+// Define a simplified, zero-dependency router for Vercel production
+const mockRouter = t.router({
+  auth: t.router({
+    me: t.procedure.query(() => MOCK.MOCK_USER),
+  }),
+  portfolio: t.router({
+    list: t.procedure.query(() => MOCK.MOCK_PORTFOLIO),
+    getOverview: t.procedure.query(() => ({
+      totalValue: 170000,
+      monthlyChange: 5.4,
+      dailyChange: 1.2,
+      lastUpdated: new Date()
+    })),
+  }),
+  market: t.router({
+    list: t.procedure.query(() => MOCK.MOCK_MARKET_DATA),
+  }),
+  ai: t.router({
+    getMarketSummary: t.procedure.query(() => MOCK.MOCK_MARKET_SUMMARY),
+    getInsights: t.procedure.query(() => ["The portfolio is well-balanced.", "Consider adding more crypto exposure."]),
+  }),
+  notifications: t.router({
+    list: t.procedure.query(() => []),
+  }),
+  alerts: t.router({
+    list: t.procedure.query(() => []),
+  }),
+});
 
 const app = express();
+app.use(express.json());
 
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-// Ensure Express trusts Vercel's proxy
-app.set("trust proxy", 1);
-
-// Debug logging for Vercel environment
-app.use((req, res, next) => {
-  console.log(`[Vercel Request] ${req.method} ${req.url}`);
-  next();
-});
-
-// Health check and diagnostics endpoint
+// Health check
 app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    env: {
-      hasDb: !!(process.env.MONGODB_URI || process.env.DATABASE_URL),
-      hasMistral: !!process.env.MISTRAL_API_KEY,
-      nodeEnv: process.env.NODE_ENV
-    },
-    url: req.url,
-    time: new Date().toISOString()
-  });
+  res.json({ status: "ok", mode: "static-mock", time: new Date().toISOString() });
 });
 
-try {
-  registerOAuthRoutes(app);
-
-  // Mount TRPC with flexible path matching
-  const trpcMiddleware = createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  });
-
-  app.use("/api/trpc", trpcMiddleware);
-  app.use("/trpc", trpcMiddleware);
-} catch (error) {
-  console.error("[Vercel] Initialization Error:", error);
-  app.use((req, res) => {
-    res.status(500).json({
-      error: "Initialization Error",
-      message: (error as any)?.message,
-      stack: (error as any)?.stack
-    });
-  });
-}
-
-// Fallback error handler
-app.use((err: any, req: any, res: any, next: any) => {
-  console.error("Vercel Express Error:", err);
-  res.status(500).json({ 
-    error: "Internal Server Error",
-    message: err.message,
-    path: req.url
-  });
+// Route everything to the mock handler
+const trpcMiddleware = createExpressMiddleware({
+  router: mockRouter,
+  createContext: () => ({}),
 });
+
+app.use("/api/trpc", trpcMiddleware);
+app.use("/trpc", trpcMiddleware);
 
 export default app;
