@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import { ENV } from "./_core/env";
 import {
   User,
@@ -14,7 +13,10 @@ import {
 } from "./models";
 
 let isConnected = false;
-let memoryServer: MongoMemoryServer | null = null;
+let memoryServer: any = null;
+
+// Disable buffering so queries fail immediately if not connected instead of hanging forever
+mongoose.set("bufferCommands", false);
 
 export async function getDb() {
   if (isConnected) return mongoose.connection;
@@ -22,9 +24,9 @@ export async function getDb() {
   const uri = process.env.MONGODB_URI || ENV.databaseUrl;
   
   if (!uri) {
-    console.warn("[Database] MongoDB connection string not found");
     if (!ENV.isProduction) {
       try {
+        const { MongoMemoryServer } = await import("mongodb-memory-server");
         memoryServer = memoryServer ?? (await MongoMemoryServer.create());
         const db = await mongoose.connect(memoryServer.getUri());
         isConnected = db.connections[0].readyState === 1;
@@ -35,11 +37,14 @@ export async function getDb() {
         return null;
       }
     }
+    console.error("[Database] No MONGODB_URI provided in production!");
     return null;
   }
 
   try {
-    const db = await mongoose.connect(uri);
+    const db = await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000, // Fail fast
+    });
     isConnected = db.connections[0].readyState === 1;
     console.log("[Database] Connected to MongoDB");
     return mongoose.connection;
@@ -47,6 +52,7 @@ export async function getDb() {
     console.warn("[Database] Failed to connect to MongoDB:", error);
     if (!ENV.isProduction) {
       try {
+        const { MongoMemoryServer } = await import("mongodb-memory-server");
         memoryServer = memoryServer ?? (await MongoMemoryServer.create());
         const db = await mongoose.connect(memoryServer.getUri());
         isConnected = db.connections[0].readyState === 1;
