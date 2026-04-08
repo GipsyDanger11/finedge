@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { BarChart3, Bot, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { Helmet } from "react-helmet-async";
 
 /**
  * All content in this page are only for example, replace with your own feature implementation
@@ -32,9 +33,14 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/40">
+    <>
+      <Helmet>
+        <title>FINEDGE - AI-powered finance, built for clarity</title>
+        <meta name="description" content="Track portfolios, paper trade, and get market insights." />
+      </Helmet>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/40">
       <main className="mx-auto max-w-6xl px-4 py-16">
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-10 animate-fadeInUp">
           <div className="flex flex-col gap-5">
             <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="h-4 w-4" />
@@ -51,13 +57,14 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button
                 size="lg"
+                aria-label="Sign in"
                 onClick={() => {
                   setLocation("/login");
                 }}
               >
                 Sign in
               </Button>
-              <Button size="lg" variant="outline" onClick={() => setLocation("/dashboard")}>
+              <Button size="lg" variant="outline" aria-label="Open dashboard" onClick={() => setLocation("/dashboard")}>
                 Open dashboard
               </Button>
             </div>
@@ -70,7 +77,7 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-5 card-elegant">
+            <Card className="p-5 card-elegant animate-slideInRight" style={{ animationDelay: "100ms" }}>
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                   <BarChart3 className="h-5 w-5 text-primary" />
@@ -84,7 +91,7 @@ export default function Home() {
               </div>
             </Card>
 
-            <Card className="p-5 card-elegant">
+            <Card className="p-5 card-elegant animate-slideInRight" style={{ animationDelay: "200ms" }}>
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Bot className="h-5 w-5 text-primary" />
@@ -98,7 +105,7 @@ export default function Home() {
               </div>
             </Card>
 
-            <Card className="p-5 card-elegant">
+            <Card className="p-5 card-elegant animate-slideInRight" style={{ animationDelay: "300ms" }}>
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                   <ShieldCheck className="h-5 w-5 text-primary" />
@@ -115,5 +122,6 @@ export default function Home() {
         </div>
       </main>
     </div>
+    </>
   );
 }

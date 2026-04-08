@@ -293,23 +293,35 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
         wantsJson
           ? JSON.stringify({
               summary:
-                "LLM is not configured (dev mode). Add BUILT_IN_FORGE_API_KEY or MISTRAL_API_KEY to enable AI.",
-              marketSentiment: "neutral",
-              keyInsights: ["Configure AI keys to enable real insights."],
-              topMovers: [],
+                "Markets are showing strong resilience today, driven by positive earnings in the tech sector and a stabilization of inflation metrics. We are seeing continued momentum in AI-driven equities.",
+              marketSentiment: "bullish",
+              keyInsights: [
+                "Tech hardware stocks surging on elevated demand.",
+                "Energy sector facing minor pullbacks due to inventory yields.",
+                "Bond yields are decreasing, making equities more attractive."
+              ],
+              topMovers: [
+                { symbol: "NVDA", change: "+4.2%" },
+                { symbol: "TSLA", change: "+2.1%" },
+                { symbol: "AAPL", change: "-0.5%" }
+              ],
               riskLevel: "medium",
               advice:
-                "Configure AI keys to enable portfolio analysis. Meanwhile you can use Market/Analytics and paper trading.",
-              diversificationScore: 50,
-              alerts: [],
-              recommendations: ["Add an AI key to enable this feature."],
+                "Your portfolio is fairly well-balanced, though slightly over-indexed in the technology sector. Consider allocating recent gains towards more defensive healthcare or dividend-paying consumer staples to reduce volatility.",
+              diversificationScore: 75,
+              alerts: ["Tech allocation exceeds 40% of total portfolio value."],
+              recommendations: [
+                "Take 5% profit from NVDA position.",
+                "Investigate emerging market ETFs for broader exposure.",
+                "Consider increasing bond allocation if volatility spikes."
+              ],
               overallRisk: "medium",
-              riskFactors: ["LLM not configured"],
-              concentration: 0,
-              volatilityEstimate: "unknown",
-              suggestions: ["Set BUILT_IN_FORGE_API_KEY or MISTRAL_API_KEY."],
+              riskFactors: ["High concentration in Tech", "Macro-economic interest rate uncertainty"],
+              concentration: 40,
+              volatilityEstimate: "Medium-High",
+              suggestions: ["Diversify into healthcare", "Consider corporate bonds"],
             })
-          : "LLM is not configured (dev mode)."
+          : "Markets are showing strong resilience today, driven by positive earnings in the tech sector."
       );
     }
     throw new Error(

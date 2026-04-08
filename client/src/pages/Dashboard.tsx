@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useMemo, useState } from "react";
+import { Helmet } from "react-helmet-async";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -44,6 +45,11 @@ export default function Dashboard() {
     { enabled: Boolean(selectedPortfolioId) }
   ) as any;
 
+  const stats = trpc.portfolio.getStats.useQuery(
+    { portfolioId: selectedPortfolioId },
+    { enabled: Boolean(selectedPortfolioId) }
+  );
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -64,8 +70,13 @@ export default function Dashboard() {
   };
 
   return (
-    <motion.div
-      className="space-y-8"
+    <>
+      <Helmet>
+        <title>Dashboard - FINEDGE</title>
+        <meta name="description" content="View your portfolio overview, market summary, and AI insights." />
+      </Helmet>
+      <motion.div
+      className="space-y-8 animate-fadeInUp"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -86,10 +97,10 @@ export default function Dashboard() {
       <motion.div variants={itemVariants}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Total Assets */}
-          <Card className="card-elegant p-6">
+          <Card className="card-elegant p-6 animate-slideInRight">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Total Assets</p>
+                <p className="text-sm text-muted-foreground mb-2">Total Portfolios</p>
                 <p className="text-3xl font-bold">
                   {portfolios.data?.length || 0}
                 </p>
@@ -101,13 +112,17 @@ export default function Dashboard() {
           </Card>
 
           {/* Portfolio Value */}
-          <Card className="card-elegant p-6">
+          <Card className="card-elegant p-6 animate-slideInRight" style={{ animationDelay: "100ms" }}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total Value</p>
-                <p className="text-3xl font-bold">$0.00</p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-2">
-                  +2.5% today
+                <p className="text-3xl font-bold">
+                  {stats.data ? `$${stats.data.totalValue.toFixed(2)}` : "$0.00"}
+                </p>
+                <p className="text-xs mt-2" suppressHydrationWarning>
+                  <span className={stats.data?.gainPercentage && stats.data.gainPercentage < 0 ? "metric-negative" : "metric-positive"}>
+                    {stats.data?.gainPercentage ? `${stats.data.gainPercentage > 0 ? '+' : ''}${stats.data.gainPercentage.toFixed(2)}%` : "0.00%"} return
+                  </span>
                 </p>
               </div>
               <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
@@ -117,13 +132,15 @@ export default function Dashboard() {
           </Card>
 
           {/* Gain/Loss */}
-          <Card className="card-elegant p-6">
+          <Card className="card-elegant p-6 animate-slideInRight" style={{ animationDelay: "200ms" }}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Total Gain</p>
-                <p className="text-3xl font-bold">$0.00</p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-2">
-                  0% return
+                <p className="text-3xl font-bold">
+                  {stats.data ? `$${stats.data.totalGain.toFixed(2)}` : "$0.00"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  All time
                 </p>
               </div>
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -149,14 +166,33 @@ export default function Dashboard() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : marketSummary.data ? (
-            <div className="space-y-4">
-              <p className="text-foreground">
+            <div className="space-y-6">
+              <p className="text-foreground text-sm leading-relaxed">
                 {typeof marketSummary.data === "string"
                   ? marketSummary.data
-                  : JSON.stringify(marketSummary.data)}
+                  : (marketSummary.data as any).summary}
               </p>
-              <div className="flex gap-2 flex-wrap">
-                <span className="badge-primary">Market Sentiment: Bullish</span>
+
+              {typeof marketSummary.data !== "string" && (marketSummary.data as any).keyInsights && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-foreground">Key Insights</h4>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mt-2">
+                    {((marketSummary.data as any).keyInsights || []).map((insight: string, i: number) => (
+                      <li key={i}>{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap pt-2 border-t border-border">
+                {typeof marketSummary.data !== "string" && (
+                  <span className="badge-primary capitalize">
+                    Sentiment: {(marketSummary.data as any).marketSentiment || "neutral"}
+                  </span>
+                )}
+                {typeof marketSummary.data === "string" && (
+                  <span className="badge-primary">Market Sentiment: Bullish</span>
+                )}
               </div>
             </div>
           ) : (
@@ -168,13 +204,13 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <motion.div variants={itemVariants}>
         <div className="flex gap-4 flex-wrap">
-          <Button size="lg" onClick={() => setLocation("/portfolio")}>
+          <Button size="lg" aria-label="View Portfolio" onClick={() => setLocation("/portfolio")}>
             View Portfolio
           </Button>
-          <Button variant="outline" size="lg" onClick={() => setLocation("/trading")}>
+          <Button variant="outline" aria-label="Start Trading" size="lg" onClick={() => setLocation("/trading")}>
             Start Trading
           </Button>
-          <Button variant="outline" size="lg" onClick={() => setLocation("/settings")}>
+          <Button variant="outline" aria-label="Settings" size="lg" onClick={() => setLocation("/settings")}>
             Settings
           </Button>
         </div>
@@ -228,7 +264,7 @@ export default function Dashboard() {
             <div className="mt-6 text-sm text-muted-foreground">
               Create a portfolio to generate AI insights.
               <div className="mt-3">
-                <Button size="sm" onClick={() => setLocation("/portfolio")}>
+                <Button size="sm" aria-label="Create portfolio" onClick={() => setLocation("/portfolio")}>
                   Create portfolio
                 </Button>
               </div>
@@ -287,5 +323,6 @@ export default function Dashboard() {
         </Card>
       </motion.div>
     </motion.div>
+    </>
   );
 }

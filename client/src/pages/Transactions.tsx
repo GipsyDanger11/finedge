@@ -61,7 +61,7 @@ export default function Transactions() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeInUp">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <ReceiptText className="h-5 w-5 text-muted-foreground" />
@@ -72,7 +72,7 @@ export default function Transactions() {
         </p>
       </div>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Portfolio</div>
@@ -96,7 +96,7 @@ export default function Transactions() {
         </div>
       </Card>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight" style={{ animationDelay: "100ms" }}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="font-medium">Add transaction</div>
           {createTx.isPending ? (
@@ -174,6 +174,7 @@ export default function Transactions() {
 
         <div className="pt-4">
           <Button
+            aria-label="Add transaction"
             disabled={
               !selectedId ||
               createTx.isPending ||
@@ -201,7 +202,7 @@ export default function Transactions() {
         </div>
       </Card>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight" style={{ animationDelay: "200ms" }}>
         <div className="flex items-center justify-between">
           <div className="font-medium">Recent transactions</div>
           {(transactions.isLoading || portfolios.isLoading) && (
@@ -279,6 +280,7 @@ export default function Transactions() {
                           <div className="inline-flex items-center gap-2">
                             <Button
                               size="sm"
+                              aria-label="Save transaction"
                               disabled={updateTx.isPending}
                               onClick={() => {
                                 updateTx.mutate({
@@ -300,6 +302,7 @@ export default function Transactions() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              aria-label="Cancel editing"
                               onClick={() => setEditingId(null)}
                             >
                               <X className="h-4 w-4" />
@@ -329,6 +332,7 @@ export default function Transactions() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              aria-label="Edit transaction"
                               onClick={() => {
                                 setEditingId(String(t._id));
                                 setEditSymbol(String(t.symbol ?? ""));
@@ -344,6 +348,7 @@ export default function Transactions() {
                             <Button
                               size="sm"
                               variant="ghost"
+                              aria-label="Delete transaction"
                               disabled={deleteTx.isPending}
                               onClick={() => {
                                 deleteTx.mutate({

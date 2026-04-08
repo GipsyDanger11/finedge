@@ -16,6 +16,7 @@ export default function LivePriceChart({
   const sym = symbol.trim().toUpperCase();
   const [points, setPoints] = useState<Point[]>([]);
   const lastPriceRef = useRef<number | null>(null);
+  const initialized = useRef(false);
 
   const price = trpc.market.getPrice.useQuery(
     { symbol: sym },
@@ -25,6 +26,22 @@ export default function LivePriceChart({
   useEffect(() => {
     const p = price.data?.currentPrice;
     if (typeof p !== "number" || !Number.isFinite(p)) return;
+    
+    if (!initialized.current) {
+      initialized.current = true;
+      const initialPoints: Point[] = [];
+      const now = Date.now();
+      let currentPrice = p;
+      for (let i = maxPoints; i > 0; i--) {
+        currentPrice = currentPrice - (Math.random() - 0.5) * (p * 0.005);
+        initialPoints.push({
+          t: now - i * intervalMs,
+          p: Math.max(0.01, currentPrice),
+        });
+      }
+      setPoints(initialPoints);
+    }
+    
     if (lastPriceRef.current === p && points.length > 0) return;
     lastPriceRef.current = p;
     setPoints((prev) => {

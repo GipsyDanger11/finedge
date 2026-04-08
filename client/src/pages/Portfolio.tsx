@@ -39,7 +39,7 @@ export default function Portfolio() {
   }, [initialBalance, name]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeInUp">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export default function Portfolio() {
         </div>
       </div>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight" style={{ animationDelay: "100ms" }}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="font-medium">Create portfolio</div>
           {create.isPending ? (
@@ -100,6 +100,7 @@ export default function Portfolio() {
         <div className="pt-4">
           <Button
             disabled={!canSubmit || create.isPending}
+            aria-label="Create portfolio"
             onClick={() => {
               create.mutate({
                 name: name.trim(),
@@ -114,7 +115,7 @@ export default function Portfolio() {
         </div>
       </Card>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight" style={{ animationDelay: "200ms" }}>
         <div className="flex items-center justify-between">
           <div className="font-medium">Your portfolios</div>
           {list.isLoading ? (
@@ -136,8 +137,8 @@ export default function Portfolio() {
 
         {list.data && list.data.length > 0 ? (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {list.data.map((p: any) => (
-              <Card key={String(p._id)} className="p-4 border bg-background/60">
+            {list.data.map((p: any, idx: number) => (
+              <Card key={String(p._id)} className="p-4 border bg-background/60 animate-slideInRight" style={{ animationDelay: `${300 + idx * 50}ms` }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-medium truncate">{p.name}</div>

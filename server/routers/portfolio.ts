@@ -10,6 +10,35 @@ import {
 import { Portfolio, Asset, Transaction } from "../models";
 import { Notification } from "../models";
 
+async function ensureGuestSeeded(userId: string) {
+  if (userId !== "guest") return;
+  const existing = await Portfolio.findOne({ userId: "guest" }).lean();
+  if (existing) return;
+
+  const p = await Portfolio.create({
+    userId: "guest",
+    name: "Tech Vanguard Fund",
+    type: "practice",
+    initialBalance: 100000,
+    currentBalance: 32675,
+    isPublic: false,
+  });
+
+  await Asset.insertMany([
+    { portfolioId: p._id, symbol: "NVDA", assetType: "stock", quantity: 150, averageCost: 85, currentPrice: 142.5, totalValue: 21375, gainLoss: 8625, gainLossPercentage: 67.6 },
+    { portfolioId: p._id, symbol: "AAPL", assetType: "stock", quantity: 60, averageCost: 175, currentPrice: 225.2, totalValue: 13512, gainLoss: 3012, gainLossPercentage: 28.6 },
+    { portfolioId: p._id, symbol: "MSFT", assetType: "stock", quantity: 40, averageCost: 310, currentPrice: 420.8, totalValue: 16832, gainLoss: 4432, gainLossPercentage: 35.7 },
+    { portfolioId: p._id, symbol: "TSLA", assetType: "stock", quantity: 75, averageCost: 200, currentPrice: 208, totalValue: 15600, gainLoss: 600, gainLossPercentage: 4.0 },
+  ]);
+
+  await Transaction.insertMany([
+    { portfolioId: p._id, type: "buy", symbol: "NVDA", quantity: 150, price: 85, totalAmount: 12750, date: new Date("2023-11-15") },
+    { portfolioId: p._id, type: "buy", symbol: "AAPL", quantity: 60, price: 175, totalAmount: 10500, date: new Date("2024-02-10") },
+    { portfolioId: p._id, type: "buy", symbol: "MSFT", quantity: 40, price: 310, totalAmount: 12400, date: new Date("2024-01-20") },
+    { portfolioId: p._id, type: "buy", symbol: "TSLA", quantity: 75, price: 200, totalAmount: 15000, date: new Date("2024-03-05") },
+  ]);
+}
+
 export const portfolioRouter = router({
   getPublicWithAssets: publicProcedure
     .input(z.object({ portfolioId: z.string() }))
@@ -25,6 +54,8 @@ export const portfolioRouter = router({
 
   overview: protectedProcedure.query(async ({ ctx }) => {
     await getDb();
+    await ensureGuestSeeded(ctx.user.id);
+
     const portfolios = await Portfolio.find({ userId: ctx.user.id }).lean();
     const portfolioIds = portfolios.map((p: any) => p._id);
     const transactionCount =
@@ -44,6 +75,8 @@ export const portfolioRouter = router({
   }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
+    await getDb();
+    await ensureGuestSeeded(ctx.user.id);
     return getPortfoliosByUserId(ctx.user.id);
   }),
 

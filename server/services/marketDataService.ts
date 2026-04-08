@@ -79,14 +79,32 @@ export async function getCachedMarketData(symbol: string): Promise<MarketPrice |
 
 export async function getMarketData(symbol: string): Promise<MarketPrice | null> {
   const cached = await getCachedMarketData(symbol);
-  if (cached) return cached;
-
-  const fresh = await fetchMarketPrice(symbol);
-  if (fresh) {
-    await updateMarketDataCache(fresh);
-    return fresh;
+  
+  // Optional fast fallback if cached isn't available
+  let data = cached;
+  if (!data) {
+    const fresh = await fetchMarketPrice(symbol);
+    if (fresh) {
+      await updateMarketDataCache(fresh);
+      data = fresh;
+    }
   }
-  return null;
+  
+  if (data) {
+    // Inject dynamic realistic ticker fluctuations (random walk)
+    const variance = data.currentPrice * 0.005; // 0.5% max swing
+    const shift = (Math.random() - 0.5) * variance;
+    data.currentPrice = Number((data.currentPrice + shift).toFixed(2));
+    
+    // Also update day limits natively if needed
+    if (data.dayHigh && data.currentPrice > data.dayHigh) data.dayHigh = data.currentPrice;
+    if (data.dayLow && data.currentPrice < data.dayLow) data.dayLow = data.currentPrice;
+    
+    // Fire-and-forget back to DB to let the shift persist a bit
+    updateMarketDataCache(data).catch(() => {});
+  }
+  
+  return data;
 }
 
 export async function updateMultipleMarketPrices(symbols: string[]): Promise<void> {

@@ -13,14 +13,18 @@ export const publicProcedure = t.procedure;
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
 
-  if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  }
+  // Allow unauthenticated access with a default guest user
+  const user = ctx.user ?? {
+    id: "guest",
+    name: "Guest",
+    email: "guest@finedge.local",
+    role: "user" as const,
+  };
 
   return next({
     ctx: {
       ...ctx,
-      user: ctx.user,
+      user,
     },
   });
 });

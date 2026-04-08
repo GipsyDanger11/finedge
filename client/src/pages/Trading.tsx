@@ -54,7 +54,7 @@ export default function Trading() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeInUp">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-muted-foreground" />
@@ -65,7 +65,7 @@ export default function Trading() {
         </p>
       </div>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight">
         <div className="flex items-center justify-between">
           <div className="font-medium">Paper trade</div>
           {portfolios.isLoading ? (
@@ -158,6 +158,7 @@ export default function Trading() {
               </div>
 
               <Button
+                aria-label="Place trade"
                 disabled={
                   place.isPending ||
                   !selectedId ||

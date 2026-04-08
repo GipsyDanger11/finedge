@@ -6,7 +6,7 @@ export default function Profile() {
   const { user } = useAuth();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeInUp">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <User className="h-5 w-5 text-muted-foreground" />
@@ -15,7 +15,7 @@ export default function Profile() {
         <p className="text-sm text-muted-foreground">Your account details.</p>
       </div>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Name</div>

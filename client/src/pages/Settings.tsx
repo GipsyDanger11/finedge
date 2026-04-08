@@ -7,7 +7,7 @@ export default function Settings() {
   const { theme, toggleTheme, switchable } = useTheme();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeInUp">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <SettingsIcon className="h-5 w-5 text-muted-foreground" />
@@ -18,7 +18,7 @@ export default function Settings() {
         </p>
       </div>
 
-      <Card className="card-elegant p-5">
+      <Card className="card-elegant p-5 animate-slideInRight">
         <div className="flex items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="font-medium">Dark mode</div>
