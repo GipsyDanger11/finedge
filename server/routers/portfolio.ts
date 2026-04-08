@@ -53,7 +53,18 @@ export const portfolioRouter = router({
     }),
 
   overview: protectedProcedure.query(async ({ ctx }) => {
-    await getDb();
+    const db = await getDb();
+    
+    // Fail-safe: if DB is missing or disconnected, return mock summary
+    if (!db) {
+      return {
+        portfolioCount: 1,
+        liveCount: 0,
+        practiceCount: 1,
+        transactionCount: 4,
+      };
+    }
+
     await ensureGuestSeeded(ctx.user.id);
 
     const portfolios = await Portfolio.find({ userId: ctx.user.id }).lean();
@@ -75,7 +86,18 @@ export const portfolioRouter = router({
   }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
-    await getDb();
+    const db = await getDb();
+    if (!db) {
+      return [{
+        _id: "mock-id-1",
+        userId: "guest",
+        name: "Tech Vanguard Fund (Mock)",
+        type: "practice",
+        initialBalance: 100000,
+        currentBalance: 32675,
+        isPublic: false,
+      }];
+    }
     await ensureGuestSeeded(ctx.user.id);
     return getPortfoliosByUserId(ctx.user.id);
   }),
